@@ -1,0 +1,2 @@
+Misc. List of errors found while rewriting gem code
+
