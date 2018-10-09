@@ -1,0 +1,28 @@
+init/GEMlumi.xml is super important!!!!
+
+removed all mention of telescopes
+
+currently there's no implementation of slow controls?
+
+fn just returns (ok(?)) -> question for my collab talk
+
+config file has like 200 lines of old shitty calib code hacked together by
+michael and tanvi (does anyone know what they're doing?)
+
+
+currently calib constants stored in a 48 kB data array which isn't even
+used AND there's an additional 48 kB for deadchannels
+
+replaced deadchannesl with local bitmaps on each apv:
+-> 250 * 2 * gemnum (6) bits = 3kb 375 bytes factor of 1000 reduction for
+deadchannels 
+
+unfortunately calib consts are still doubles and big, probably best to
+parse them rather than put them on the stack?
+
+miss me with that shit thats what Tanvi must have been working on when I
+met her D: D: D:
+
+many repeated functions for x/y data that do the same and should just be
+wrappers, or even better let the axis distinction lie with the apv
+

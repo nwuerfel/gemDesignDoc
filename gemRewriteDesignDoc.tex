@@ -4,12 +4,6 @@
 \usepackage{amsthm, amsmath, amssymb}
 \usepackage{listings}
 
-\newcommand{\featureFooter}{
-\noindent
-STATUS: \\
-SALVAGE:\\
-RESPONSIBILITY:}
-
 \title{Gem Analysis Rewrite- Design Document} 
 \author{Noah Wuerfel}
 \date{\today}
@@ -88,6 +82,7 @@ There are a number of constants which are referenced in many places throughout t
 \item NUM\_CHAN\_PER\_AXIS (NUM\_CHAN\_APV\_1 + NUM\_CHAN\_APV\_2)
 \item NUM\_CHAN\_PER\_GEM 2*(NUM\_CHAN\_PER\_AXIS)
 \item NUM\_NEIGHBOR\_CHANNELS 2
+\item NUM\_MAX\_CLUSTER\_CANDIDATES 5
 \end{itemize}
 
 There are a number of ancillary data types defined for this analysis, here's a list of them:
@@ -96,7 +91,9 @@ There are a number of ancillary data types defined for this analysis, here's a l
 	\item 
 	\begin{lstlisting}	
 apv_common_mode_info{
-
+	uint_32 max_channel_num;
+	double peak_adc_value;
+	double common_mode;
 };
 	\end{lstlisting}
 	
@@ -104,21 +101,26 @@ apv_common_mode_info{
 	\begin{lstlisting}	
 enum Axis{"x","y"}	;
 	\end{lstlisting}
-	
+
 	\item
 	\begin{lstlisting}
 struct gemRawData{
 	uint_32 event_id;
 	uint_32 num_apvs;
 	uint_32 apv_header[NUM_GEMS * NUM_APV_PER_GEM]
-	int apv_id;
+	uint_32 apv_id;
 	int apv_data[NUM_GEMS][NUM_MAX_CHAN_PER_APV]		
 };
 	\end{lstlisting}
 	
 	\item 
 	\begin{lstlisting}	
-
+struct gemCluster{
+	uint_32 event_id;
+	int x_chan_num;
+	int y_chan_num;	
+	double adc_xy_avg_weight;
+};
 	\end{lstlisting}
 	
 \end{enumerate}
@@ -139,11 +141,13 @@ There are a number of histograms of interest in this analysis, here's a list of 
 	\subsection{gem}
 	The gem class is declared in gem.h and defined in gem.cxx. It abstracts the GEM detectors in our experiment. Each gem has an associated set of apv items which read data from the detector. \\
  
-	Here's the class elements:
+	Here's the class elements:\\
+	Note that the hitmaps being migrated to the gems means they get set in define histograms by iterating through the gems but enforces logical separation.
 	\begin{lstlisting} 
 int  id;
 const char* name;
 std::vector<apv* > apv_list;
+dH1 hitmap;
 	\end{lstlisting} 
 	
 	And the class methods:
@@ -165,8 +169,8 @@ For each axis_apv on gem:
 		\item findPedestal( data )\\
 I dunno how good this is: looks for "local maxima" but how is that range defined? I wanna see rms values for resolution/ cluster size from building the gems.
 		\begin{lstlisting}
-check data  for "local maxima":
-	sum channels != local maxima and neighbors
+findAllPeaks()
+	sum channels != peaks and neighbors
 	total/channels counted is pedestal		
 		\end{lstlisting}
 	
@@ -176,12 +180,34 @@ For each data channel
 	subtract pedestal from bin value
 		\end{lstlisting}
 		
+		\item findClusters()\\
+		returns std::vector of clusters guarunteed to be in descending order of weight
+		\begin{lstlisting}
+For each "peak" in x:
+	For each "peak in y:
+		weight cluster by xy ADC sums
+		take NUM_MAX_CLUSTER_CANDIDATES
+		return vector of them as gemClusters
+		\end{lstlisting}
+		
+		\item drawClusterToHitmap( cluster ) 
+		\begin{lstlisting}
+Take first cluster:
+	draw x,y data to hitmap for this gem
+		\end{lstlisting}
+		
+		\item drawClustersToHitmap(vector of clusters)\\
+		for debugging/ interest
+		\begin{lstlisting}
+For each cluster
+	drawClusterToHitmap()
+		\end{lstlisting}
+		
 		\item 
 		\begin{lstlisting}
 		\end{lstlisting}
+		
 	\end{enumerate}
-	
-	\featureFooter
 	
 	\subsection{apv}
 	The apv class is declared in apv.h and defined in apv.cxx. It abstracts the APV-25 chips which digitize and read strip data from the GEM detectors. Each APV needs to be calibrated for common mode gain subtraction. In addition, it's unclear to me if this is necessary, but it seems there used to be a form of channel to channel gain calibration. Ie scaling each channel's data by some factor order 1 which is predetermined and seems out of date.\\
@@ -196,7 +222,7 @@ const char* name;
 apv_axis axis;
 std::vector<double> apv_channel_data;
 std::vector<double> channel_gain_factors;
-std::bitset<NUM_MAX_CHAN_PER_APV>
+std::bitset<NUM_MAX_CHAN_PER_APV> validChannelSet:
 apv_common_mode_info cmode_info;
 	\end{lstlisting}
 	
@@ -228,7 +254,7 @@ For each channel:
 		\end{lstlisting}
 		
 		\item parsePerChanGain() \\
-I dunno wtf is going on here, is there per chan gain or not? It looks like theres calb constants but where did they come from? There's a call to APV Calib in the recipes but the output is never used nor does it look like a gain factor...	
+Not implemented in current codebase, but seems like an alternative to common mode subtraction? The original idea was to look at the the average maximum adc value for the gems as a way of calibrating the channels. Not implemented but an interesting idea. Now we need a good metric to evaluate gain factors per channel
 		\begin{lstlisting}
 From gain calib vals:
 	channel_gain_factors.pushback(this chan gain)
@@ -243,8 +269,6 @@ For each channel:
 		\end{lstlisting}
 		
 	\end{enumerate}
-	
-	\featureFooter
 	
 	\subsection{gemControl}
 	The gemControl class is declared in gemControl.h and defined in gemControl.cxx. It processes and manages data from all the gems and holds definitions for "global" GEM analysis methods like defineHistograms and process which will be called by most GEM recipes. 
@@ -264,6 +288,8 @@ for each 1d histo:
 	add to 1d histo list
 for each 2d histo:
 	etc.
+for each gem:
+	gem->hitmap = new dH1()
 		\end{lstlisting}
 		
 		\item startup():\\
@@ -279,15 +305,16 @@ For NUM_GEMS:
 		The process function is called for every event in the data. 
 		\begin{lstlisting}
 for each gem:
-	clear apv data
-	load apv data for this event
-	validate apv data
-	calibrate data
-	findClusters()
-	writeOutClusters()			
+	for each apv:
+		clear apv data
+		load apv data for this event
+		validate apv data
+		calibrate data
+	clusters = findClusters()
+	drawClustersToHitmap( clusters )		
 		\end{lstlisting}
 		
-		\item read\_daq\_raw\_event\_data()
+		\item readDaqRawEventData()
 		\begin{lstlisting}
 for each gem:
 	for each apv on gem:
@@ -295,33 +322,40 @@ for each gem:
 		populate apv data from daq_tree:MMT
 		\end{lstlisting}
 		
+		\item initInTrees()
+		\begin{lstlisting}
+		\end{lstlisting}
+		
+		\item initOutTrees()
+		\begin{lstlisting}
+		\end{lstlisting}
+		
 	\end{enumerate}
 	
-	\featureFooter
 	
-
-
-
-
-
-
-
 \subsection{binaryBlobReader}
 
+Here are the class elements:
 
-\noindent
-STATUS: Complete\\
-SALVAGE: Total\\
-RESPONSIBILITY: N/A
-
-
+\begin{lstlisting}
+gemRawData raw_data;
+\end{lstlisting}
 
 
+Here are the class methods:
+	\begin{enumerate}
+	
+		\item readBank
+		\begin{lstlisting}
+iterate over data
+	set raw_data event_id
+	set raw_data apv_id
+	set raw_data num_apvs
+	fill raw_data apv_header
+		\end{lstlisting}
+	
+	\end{enumerate}
 
-
-\subsection{hitFinder}
-
-\featureFooter
 
 \subsection{histogramList}
 The histogram list keeps track of all histograms for easy 
@@ -330,7 +364,21 @@ The histogram list keeps track of all histograms for easy
 Sometimes helper functions are useful here are some:
 
 	\begin{itemize}
-	\item 
+		\item findAllPeaks( data )\\
+		unfortunately finding all peaks is always O(n) 
+		\begin{lstlisting}
+for all channels
+	if chan bigger than both neighbors
+		peaklist.pushback(this channel)
+		\end{lstlisting}
+		
+		\item findMax( data )\\
+		unfortunately finding Max is O(n)
+		\begin{lstlisting}
+for all channels
+	if this is the biggest one keep track
+return biggest one
+		\end{lstlisting}
 	\end{itemize}
 
 \section{Major changes}
@@ -342,10 +390,21 @@ Here's major structural or algorithmic changes:
 			removing all depricated references to telescopes and L/R which is a relic from OLYMPUS
 		\item 
 			moved all init steps to startup
+		\item
+			removing all repeated, unnecessary loops over data
+		\item 
+			
 	\end{enumerate}
 
-\section{Init}
 
 \section{Schedule}
+
+Week:\\
+Oct 8 - 14: Writing gem and apv classes, Ryan unit tests them\\
+Oct 15 - 21: Write gemControl and load real data functional code by 2 weeks\\
+Oct 22 - 28: HAWAII\\
+Oct 29 - Nov 5: findClusters studies, common mode studies \\
+Nov 6 -12: unit testing\\
+Nov 13 - 20: unit testing and complete\\
 
 \end{document}

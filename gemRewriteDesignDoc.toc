@@ -5,12 +5,10 @@
 \contentsline {section}{\numberline {5}Constants, Data Types, and Histograms}{3}
 \contentsline {section}{\numberline {6}Classes and their Methods}{5}
 \contentsline {subsection}{\numberline {6.1}gem}{5}
-\contentsline {subsection}{\numberline {6.2}apv}{5}
+\contentsline {subsection}{\numberline {6.2}apv}{6}
 \contentsline {subsection}{\numberline {6.3}gemControl}{7}
-\contentsline {subsection}{\numberline {6.4}binaryBlobReader}{7}
-\contentsline {subsection}{\numberline {6.5}hitFinder}{8}
-\contentsline {subsection}{\numberline {6.6}histogramList}{8}
-\contentsline {subsection}{\numberline {6.7}Helpers}{8}
-\contentsline {section}{\numberline {7}Major changes}{8}
-\contentsline {section}{\numberline {8}Init}{8}
-\contentsline {section}{\numberline {9}Schedule}{8}
+\contentsline {subsection}{\numberline {6.4}binaryBlobReader}{8}
+\contentsline {subsection}{\numberline {6.5}histogramList}{8}
+\contentsline {subsection}{\numberline {6.6}Helpers}{9}
+\contentsline {section}{\numberline {7}Major changes}{9}
+\contentsline {section}{\numberline {8}Schedule}{9}
